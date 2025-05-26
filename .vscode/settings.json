@@ -1,0 +1,9 @@
+{
+    "omnisharp.enableRoslynAnalyzers": true,
+    "files.exclude": {
+        "**/*.csproj.user": true,
+        "bin/": true,
+        "obj/": true
+    },
+    "editor.formatOnSave": true
+}
