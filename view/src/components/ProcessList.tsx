@@ -2,8 +2,8 @@
 import { Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Typography, TableSortLabel } from '@mui/material';
 
 // ====== VARIÁVEIS DE TAMANHO DE FONTE AJUSTÁVEIS ======
-export const PROCESS_TITLE_FONT_SIZE = 35; // px
-export const PROCESS_ROW_FONT_SIZE = 24;   // px
+export const PROCESS_TITLE_FONT_SIZE = 20; // px
+export const PROCESS_ROW_FONT_SIZE = 14;   // px
 // ======================================================
 
 // Define o tipo de cada processo
@@ -88,7 +88,15 @@ export default function ProcessList({ processes, memoryTotalKb }: ProcessListPro
     };
 
     return (
-        <TableContainer component={Paper} sx={{ background: 'background.paper', mt: 2 }}>
+        <TableContainer
+            component={Paper}
+            sx={{
+                background: 'background.paper',
+                mt: 2,
+                maxHeight: 500,
+                overflowY: 'auto'
+            }}
+        >
             {/* Título da tabela */}
             <Typography
                 variant="h6"
@@ -98,10 +106,13 @@ export default function ProcessList({ processes, memoryTotalKb }: ProcessListPro
             >
                 Processos Ativos
             </Typography>
-            <Table size="small">
+            <Table size="small" stickyHeader>
                 <TableHead>
                     <TableRow>
-                        <TableCell sortDirection={orderBy === 'pid' ? order : false} sx={{ fontSize: PROCESS_ROW_FONT_SIZE }}>
+                        <TableCell
+                            sortDirection={orderBy === 'pid' ? order : false}
+                            sx={{ fontSize: PROCESS_ROW_FONT_SIZE, minWidth: 60, maxWidth: 80, width: 70 }}
+                        >
                             <TableSortLabel
                                 active={orderBy === 'pid'}
                                 direction={orderBy === 'pid' ? order : 'asc'}
@@ -110,7 +121,17 @@ export default function ProcessList({ processes, memoryTotalKb }: ProcessListPro
                                 PID
                             </TableSortLabel>
                         </TableCell>
-                        <TableCell sortDirection={orderBy === 'name' ? order : false} sx={{ fontSize: PROCESS_ROW_FONT_SIZE }}>
+                        <TableCell
+                            sortDirection={orderBy === 'name' ? order : false}
+                            sx={{
+                                fontSize: PROCESS_ROW_FONT_SIZE,
+                                minWidth: 120,
+                                maxWidth: 220,
+                                width: 180,
+                                wordBreak: 'break-all',
+                                whiteSpace: 'normal'
+                            }}
+                        >
                             <TableSortLabel
                                 active={orderBy === 'name'}
                                 direction={orderBy === 'name' ? order : 'asc'}
@@ -119,7 +140,10 @@ export default function ProcessList({ processes, memoryTotalKb }: ProcessListPro
                                 Processo
                             </TableSortLabel>
                         </TableCell>
-                        <TableCell sortDirection={orderBy === 'cpu' ? order : false} sx={{ fontSize: PROCESS_ROW_FONT_SIZE }}>
+                        <TableCell
+                            sortDirection={orderBy === 'cpu' ? order : false}
+                            sx={{ fontSize: PROCESS_ROW_FONT_SIZE, minWidth: 70, maxWidth: 90, width: 80 }}
+                        >
                             <TableSortLabel
                                 active={orderBy === 'cpu'}
                                 direction={orderBy === 'cpu' ? order : 'asc'}
@@ -128,7 +152,10 @@ export default function ProcessList({ processes, memoryTotalKb }: ProcessListPro
                                 CPU (%)
                             </TableSortLabel>
                         </TableCell>
-                        <TableCell sortDirection={orderBy === 'memory_kb' ? order : false} sx={{ fontSize: PROCESS_ROW_FONT_SIZE }}>
+                        <TableCell
+                            sortDirection={orderBy === 'memory_kb' ? order : false}
+                            sx={{ fontSize: PROCESS_ROW_FONT_SIZE, minWidth: 90, maxWidth: 110, width: 100 }}
+                        >
                             <TableSortLabel
                                 active={orderBy === 'memory_kb'}
                                 direction={orderBy === 'memory_kb' ? order : 'asc'}
@@ -137,7 +164,10 @@ export default function ProcessList({ processes, memoryTotalKb }: ProcessListPro
                                 Memória (KB)
                             </TableSortLabel>
                         </TableCell>
-                        <TableCell sortDirection={orderBy === 'memory_percent' ? order : false} sx={{ fontSize: PROCESS_ROW_FONT_SIZE }}>
+                        <TableCell
+                            sortDirection={orderBy === 'memory_percent' ? order : false}
+                            sx={{ fontSize: PROCESS_ROW_FONT_SIZE, minWidth: 90, maxWidth: 110, width: 100 }}
+                        >
                             <TableSortLabel
                                 active={orderBy === 'memory_percent'}
                                 direction={orderBy === 'memory_percent' ? order : 'asc'}
@@ -152,7 +182,15 @@ export default function ProcessList({ processes, memoryTotalKb }: ProcessListPro
                     {sortedProcesses.map(proc => (
                         <TableRow key={proc.pid}>
                             <TableCell sx={{ fontSize: PROCESS_ROW_FONT_SIZE }}>{proc.pid}</TableCell>
-                            <TableCell sx={{ fontSize: PROCESS_ROW_FONT_SIZE }}>{proc.name}</TableCell>
+                            <TableCell
+                                sx={{
+                                    fontSize: PROCESS_ROW_FONT_SIZE,
+                                    wordBreak: 'break-all',
+                                    whiteSpace: 'normal'
+                                }}
+                            >
+                                {proc.name}
+                            </TableCell>
                             <TableCell sx={{ fontSize: PROCESS_ROW_FONT_SIZE }}>
                                 {proc.cpu !== undefined ? proc.cpu.toString() : '-'}
                             </TableCell>

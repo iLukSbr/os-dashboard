@@ -22,7 +22,7 @@ O OS Dashboard é uma aplicação web composta por um controller em Rust e um fr
 - [rustup](https://rustup.rs/)
 - [Node.js](https://nodejs.org/pt/download)
 - Chocolatey
-- Em um terminal como administrador: `choco install make`
+- Em um terminal como administrador: `choco install make` e `npm install` na pasta `view`.
 
 ## Executar
 

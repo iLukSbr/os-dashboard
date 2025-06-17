@@ -4,7 +4,6 @@ use serde::Serialize; // Para serializar structs em JSON
 use std::collections::HashMap; // Mapa para associar PID ao uso de CPU
 use std::ffi::OsString; // Para manipular strings do Windows
 use std::mem::size_of; // Para obter tamanho de structs
-use std::net::SocketAddr; // Para endereço do servidor
 use std::os::windows::ffi::OsStringExt; // Para converter strings do Windows
 use std::ptr::null_mut; // Para ponteiros nulos
 use tokio::task; // Para executar tarefas bloqueantes em threads separadas
@@ -12,14 +11,14 @@ use sysinfo::System; // Para obter informações do sistema
 
 // --- FFI das APIs do Windows ---
 // Liga funções da API do Windows para uso direto em Rust
-#[link(name = "kernel32")]
+#[link(name = "kernel32")] // Acessar a DLL
 extern "system" {
     fn GetTickCount64() -> u64; // Retorna uptime do sistema em ms
     fn GlobalMemoryStatusEx(lpBuffer: *mut MEMORYSTATUSEX) -> i32; // Preenche struct com info de memória
     fn OpenProcess(dwDesiredAccess: u32, bInheritHandle: i32, dwProcessId: u32) -> *mut std::ffi::c_void; // Abre processo
     fn CloseHandle(hObject: *mut std::ffi::c_void) -> i32; // Fecha handle de processo
 }
-#[link(name = "psapi")]
+#[link(name = "psapi")] // Acessar a DLL
 extern "system" {
     fn GetProcessMemoryInfo(
         Process: *mut std::ffi::c_void,
@@ -33,14 +32,6 @@ extern "system" {
         lpBaseName: *mut u16,
         nSize: u32,
     ) -> u32; // Retorna nome do executável do processo
-}
-#[link(name = "user32")]
-extern "system" {
-    fn GetSystemTimes(
-        lpIdleTime: *mut u64,
-        lpKernelTime: *mut u64,
-        lpUserTime: *mut u64,
-    ) -> i32; // Retorna tempos de CPU do sistema
 }
 
 // --- Structs FFI ---
@@ -102,7 +93,6 @@ struct SystemInfo {
     memory_percent: String,      // Uso de memória (%)
     uptime: String,              // Uptime formatado
     process_count: usize,        // Total de processos
-    thread_count: usize,         // Total de threads (não disponível, retorna 0)
     cpu_base_speed_mhz: Option<u64>, // Clock base (primeiro core)
     cpu_logical_processors: u32,     // Núcleos lógicos
 }
@@ -183,7 +173,7 @@ async fn get_system_info() -> Json<SystemInfo> {
     let sysinfo = task::spawn_blocking(|| {
         // --- MEMÓRIA E UPTIME PELO FFI ---
         let mut mem_status = MEMORYSTATUSEX {
-            dwLength: size_of::<MEMORYSTATUSEX>() as u32, // Tamanho da struct
+            dwLength: size_of::<MEMORYSTATUSEX>() as u32,
             dwMemoryLoad: 0,
             ullTotalPhys: 0,
             ullAvailPhys: 0,
@@ -193,7 +183,6 @@ async fn get_system_info() -> Json<SystemInfo> {
             ullAvailVirtual: 0,
             ullAvailExtendedVirtual: 0,
         };
-        // Lê total e livre de memória física
         let (memory_total_mb, memory_free_mb) = unsafe {
             if GlobalMemoryStatusEx(&mut mem_status) != 0 {
                 (mem_status.ullTotalPhys / 1024 / 1024, mem_status.ullAvailPhys / 1024 / 1024)
@@ -201,65 +190,52 @@ async fn get_system_info() -> Json<SystemInfo> {
                 (0, 0)
             }
         };
-        let memory_used_mb = memory_total_mb.saturating_sub(memory_free_mb); // Calcula usada
+        let memory_used_mb = memory_total_mb.saturating_sub(memory_free_mb);
         let memory_percent = if memory_total_mb > 0 {
-            format!("{:.1}%", (memory_used_mb as f64 / memory_total_mb as f64) * 100.0) // Porcentagem usada
+            format!("{:.1}%", (memory_used_mb as f64 / memory_total_mb as f64) * 100.0)
         } else {
             "0.0%".to_string()
         };
 
         // Uptime pelo FFI
-        let uptime_secs = unsafe { GetTickCount64() / 1000 }; // Segundos de uptime
+        let uptime_secs = unsafe { GetTickCount64() / 1000 };
         let hours = uptime_secs / 3600;
         let mins = (uptime_secs % 3600) / 60;
-        let uptime = format!("{}h {}m", hours, mins); // Formata uptime
+        let uptime = format!("{}h {}m", hours, mins);
 
-        // --- CPU USO TOTAL E POR CORE PELO FFI ---
-        let mut idle: u64 = 0;
-        let mut kernel: u64 = 0;
-        let mut user: u64 = 0;
-        let mut cpu_total = 0.0;
-        unsafe {
-            if GetSystemTimes(&mut idle, &mut kernel, &mut user) != 0 {
-                let total = kernel + user;
-                if total > 0 {
-                    cpu_total = 100.0 * (total - idle) as f64 / total as f64; // Calcula uso total de CPU
-                }
-            }
-        }
+        // --- USO POR CORE E TOTAL PELO SYSINFO ---
+        let mut sys = System::new_all();
+        sys.refresh_all();
+        std::thread::sleep(std::time::Duration::from_millis(1000)); // Intervalo entre consultas
+        sys.refresh_all();
 
-        // --- USO POR CORE PELO SYSINFO ---
-        let mut sys = System::new_all(); // Cria struct sysinfo
-        sys.refresh_all(); // Atualiza info
-        std::thread::sleep(std::time::Duration::from_millis(200)); // Espera para medir CPU
-        sys.refresh_all(); // Atualiza novamente
+        let cpu_per_core: Vec<f32> = sys.cpus().iter().map(|c| c.cpu_usage()).collect();
+        let cpu_total = if !cpu_per_core.is_empty() {
+            cpu_per_core.iter().sum::<f32>() / cpu_per_core.len() as f32
+        } else {
+            0.0
+        };
 
-        let cpu_per_core: Vec<f32> = sys.cpus().iter().map(|c| c.cpu_usage()).collect(); // Uso por core
-
-        // --- Novas informações do sistema ---
-        let process_count = sys.processes().len(); // Total de processos
-
-        let thread_count = 0; // Não disponível, retorna 0
-
-        let cpu_base_speed_mhz = sys.cpus().get(0).map(|c| c.frequency()); // Clock base do primeiro core
-        let cpu_logical_processors = sys.cpus().len() as u32; // Número de núcleos lógicos
+        // --- Informações do sistema ---
+        let process_count = sys.processes().len();
+        let cpu_base_speed_mhz = sys.cpus().get(0).map(|c| c.frequency());
+        let cpu_logical_processors = sys.cpus().len() as u32;
 
         SystemInfo {
-            cpu_total: format!("{:.1}%", cpu_total), // Uso total de CPU
-            cpu_per_core, // Uso por core
-            memory_total_mb, // Memória total
-            memory_used_mb, // Memória usada
-            memory_free_mb, // Memória livre
-            memory_percent, // Porcentagem de uso de memória
-            uptime, // Uptime formatado
-            process_count, // Total de processos
-            thread_count, // Total de threads
-            cpu_base_speed_mhz, // Clock base
-            cpu_logical_processors, // Núcleos lógicos
+            cpu_total: format!("{:.1}%", cpu_total), // Uso total de CPU (média dos cores)
+            cpu_per_core,
+            memory_total_mb,
+            memory_used_mb,
+            memory_free_mb,
+            memory_percent,
+            uptime,
+            process_count,
+            cpu_base_speed_mhz,
+            cpu_logical_processors,
         }
     }).await.unwrap();
 
-    Json(sysinfo) // Retorna JSON com informações do sistema
+    Json(sysinfo)
 }
 
 // --- Função principal: inicializa o servidor HTTP ---
@@ -269,7 +245,7 @@ async fn main() {
     let app = Router::new()
         .route("/api/processes", get(list_processes)) // Rota para lista de processos
         .route("/api/system", get(get_system_info)); // Rota para info do sistema
-    let addr = SocketAddr::from(([0, 0, 0, 0], 3001)); // Endereço do servidor
+    let addr: std::net::SocketAddr = "[::]:3001".parse().unwrap(); // Endereço do servidor (IPv6 e IPv4)
     println!("API rodando em http://localhost:3001/api/");
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap(); // Cria listener TCP
     axum::serve(listener, app.into_make_service())

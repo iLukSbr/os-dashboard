@@ -7,12 +7,12 @@ import Chart from './Chart';
 import ProcessList from './ProcessList';
 
 // ====== VARIÁVEIS DE TAMANHO DE FONTE AJUSTÁVEIS ======
-export const CARD_TITLE_FONT_SIZE = 20; // px - Tamanho do título dos cards
-export const CARD_VALUE_FONT_SIZE = 35; // px - Tamanho do valor dos cards
+export const CARD_TITLE_FONT_SIZE = 16; // px - Tamanho do título dos cards
+export const CARD_VALUE_FONT_SIZE = 24; // px - Tamanho do valor dos cards
 export const CARD_MIN_WIDTH = 140;      // px - Largura mínima dos cards
 export const CARD_MIN_HEIGHT = 80;      // px - Altura mínima dos cards
 export const CARD_GAP = 2;              // Espaçamento entre cards
-export const TAB_FONT_SIZE = 20;        // px - Tamanho da fonte das abas
+export const TAB_FONT_SIZE = 14;        // px - Tamanho da fonte das abas
 // ======================================================
 
 // Tipagem das informações do sistema recebidas da API
