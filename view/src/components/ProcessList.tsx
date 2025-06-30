@@ -6,36 +6,49 @@ export const PROCESS_TITLE_FONT_SIZE = 20; // px
 export const PROCESS_ROW_FONT_SIZE = 14;   // px
 // ======================================================
 
-// Define o tipo de cada processo
-type ProcessInfo = {
+// Tipagem fiel ao backend
+export type ThreadInfo = {
+    tid: number;
+    base_priority: number;
+    delta_priority: number;
+    start_address: number;
+    state: string;
+    wait_reason: string;
+    context_switches?: number;
+    user_time_ms?: number;
+    kernel_time_ms?: number;
+};
+export type ProcessInfo = {
     pid: number;
     name: string;
-    cpu?: number;
-    memory_kb?: number;
-    // Novos campos para recursos abertos
-    open_files?: FileResource[];
-    open_sockets?: SocketResource[];
-    open_mutexes?: MutexResource[];
+    exe_path?: string;
+    status: string;
+    username: string;
+    cpu: number;
+    memory_kb: number;
+    arch: string;
+    description: string;
+    page_faults: number;
+    peak_working_set_kb: number;
+    working_set_kb: number;
+    pagefile_kb: number;
+    io_read_bytes?: number;
+    io_write_bytes?: number;
+    io_read_ops?: number;
+    io_write_ops?: number;
+    handle_count?: number;
+    thread_count?: number;
+    parent_pid?: number;
+    priority?: number;
+    creation_time?: number;
+    session_id?: number;
+    command_line?: string;
+    environment?: string[];
+    threads: ThreadInfo[];
+    open_resources?: string[];
+    memory_percent?: number;
 };
 
-type FileResource = {
-    path: string;
-    mode: string;
-    size: number;
-};
-
-type SocketResource = {
-    local: string;
-    remote: string;
-    state: string;
-};
-
-type MutexResource = {
-    name: string;
-    type: string;
-};
-
-// Marque as props como readonly conforme sugerido pelo SonarLint
 type ProcessListProps = {
     readonly processes: ProcessInfo[];
     readonly memoryTotalKb?: number;
@@ -86,8 +99,6 @@ function getComparator(
         : (a, b) => -descendingComparator(a, b, orderBy, memoryTotalKb);
 }
 
-
-
 export default function ProcessList({ processes, memoryTotalKb }: ProcessListProps) {
     const [order, setOrder] = useState<Order>('asc');
     const [orderBy, setOrderBy] = useState<OrderBy>('pid');
@@ -104,11 +115,28 @@ export default function ProcessList({ processes, memoryTotalKb }: ProcessListPro
     // Ordena os processos conforme o estado atual
     const sortedProcesses = [...processes].sort(getComparator(order, orderBy, memoryTotalKb));
 
-    // Função para calcular o uso de memória em %
-    const getMemoryPercent = (memory_kb?: number) => {
-        if (!memoryTotalKb || !memory_kb) return '-';
-        const percent = (memory_kb / memoryTotalKb) * 100;
-        return percent.toFixed(2) + '%';
+    // Função para obter o uso de memória em % (usa apenas o valor do backend, sem cálculo)
+    const getMemoryPercent = (proc: any) => {
+        // Mostra exatamente o valor vindo do backend, mesmo se for 0
+        if (Object.prototype.hasOwnProperty.call(proc, 'memory_percent')) {
+            const val = proc.memory_percent;
+            if (val === 0) return '0.00%';
+            if (typeof val === 'number' && !isNaN(val)) return val.toFixed(8).replace(/0+$/, '').replace(/\.$/, '') + '%';
+            if (typeof val === 'string' && val !== '') {
+                const num = parseFloat(val);
+                if (!isNaN(num)) return num.toFixed(8).replace(/0+$/, '').replace(/\.$/, '') + '%';
+            }
+        }
+        if (Object.prototype.hasOwnProperty.call(proc, 'memoryPercent')) {
+            const val = proc.memoryPercent;
+            if (val === 0) return '0.00%';
+            if (typeof val === 'number' && !isNaN(val)) return val.toFixed(8).replace(/0+$/, '').replace(/\.$/, '') + '%';
+            if (typeof val === 'string' && val !== '') {
+                const num = parseFloat(val);
+                if (!isNaN(num)) return num.toFixed(8).replace(/0+$/, '').replace(/\.$/, '') + '%';
+            }
+        }
+        return '-';
     };
 
     // Função para abrir detalhes do processo
@@ -228,11 +256,13 @@ export default function ProcessList({ processes, memoryTotalKb }: ProcessListPro
                                     {proc.name}
                                 </TableCell>
                                 <TableCell sx={{ fontSize: PROCESS_ROW_FONT_SIZE }}>
-                                    {proc.cpu !== undefined ? proc.cpu.toString() : '-'}
+                                    {typeof proc.cpu === 'number' && !isNaN(proc.cpu) ? proc.cpu : 0}
                                 </TableCell>
-                                <TableCell sx={{ fontSize: PROCESS_ROW_FONT_SIZE }}>{proc.memory_kb ?? '-'}</TableCell>
                                 <TableCell sx={{ fontSize: PROCESS_ROW_FONT_SIZE }}>
-                                    {getMemoryPercent(proc.memory_kb)}
+                                    {typeof proc.memory_kb === 'number' && !isNaN(proc.memory_kb) ? proc.memory_kb : 0}
+                                </TableCell>
+                                <TableCell sx={{ fontSize: PROCESS_ROW_FONT_SIZE }}>
+                                    {getMemoryPercent(proc)}
                                 </TableCell>
                                 <TableCell>
                                     <Button size="small" onClick={() => handleOpenDetails(proc)}>
@@ -247,53 +277,59 @@ export default function ProcessList({ processes, memoryTotalKb }: ProcessListPro
 
             {/* Diálogo de detalhes do processo */}
             <Dialog open={dialogOpen} onClose={handleCloseDialog} maxWidth="md" fullWidth>
-                <DialogTitle>Recursos do Processo PID {selectedProcess?.pid} - {selectedProcess?.name}</DialogTitle>
+                <DialogTitle>Detalhes do Processo PID {selectedProcess?.pid} - {selectedProcess?.name}</DialogTitle>
                 <DialogContent dividers>
-                    <Typography variant="subtitle1" sx={{ mb: 1 }}>Arquivos Abertos</Typography>
-                    <List dense>
-                        {selectedProcess?.open_files && selectedProcess.open_files.length > 0 ? (
-                            selectedProcess.open_files.map((f, idx) => (
-                                <ListItem key={f.path + idx}>
-                                    <ListItemText
-                                        primary={f.path}
-                                        secondary={`Modo: ${f.mode} | Tamanho: ${f.size} bytes`}
-                                    />
-                                </ListItem>
-                            ))
-                        ) : (
-                            <ListItem><ListItemText primary="Nenhum arquivo aberto." /></ListItem>
-                        )}
-                    </List>
-                    <Typography variant="subtitle1" sx={{ mt: 2, mb: 1 }}>Sockets Abertos</Typography>
-                    <List dense>
-                        {selectedProcess?.open_sockets && selectedProcess.open_sockets.length > 0 ? (
-                            selectedProcess.open_sockets.map((s, idx) => (
-                                <ListItem key={s.local + s.remote + idx}>
-                                    <ListItemText
-                                        primary={`${s.local} ⇄ ${s.remote}`}
-                                        secondary={`Estado: ${s.state}`}
-                                    />
-                                </ListItem>
-                            ))
-                        ) : (
-                            <ListItem><ListItemText primary="Nenhum socket aberto." /></ListItem>
-                        )}
-                    </List>
-                    <Typography variant="subtitle1" sx={{ mt: 2, mb: 1 }}>Semáforos/Mutexes</Typography>
-                    <List dense>
-                        {selectedProcess?.open_mutexes && selectedProcess.open_mutexes.length > 0 ? (
-                            selectedProcess.open_mutexes.map((m, idx) => (
-                                <ListItem key={m.name + idx}>
-                                    <ListItemText
-                                        primary={m.name}
-                                        secondary={`Tipo: ${m.type}`}
-                                    />
-                                </ListItem>
-                            ))
-                        ) : (
-                            <ListItem><ListItemText primary="Nenhum semáforo/mutex aberto." /></ListItem>
-                        )}
-                    </List>
+                    {selectedProcess && (
+                        <>
+                            <Typography variant="subtitle1" sx={{ mb: 1 }}>Informações Gerais</Typography>
+                            <List dense>
+                                <ListItem><ListItemText primary="Usuário" secondary={selectedProcess.username ?? '-'} /></ListItem>
+                                <ListItem><ListItemText primary="Status" secondary={selectedProcess.status ?? '-'} /></ListItem>
+                                <ListItem><ListItemText primary="Arquitetura" secondary={selectedProcess.arch ?? '-'} /></ListItem>
+                                <ListItem><ListItemText primary="Descrição" secondary={selectedProcess.description ?? '-'} /></ListItem>
+                                <ListItem><ListItemText primary="Linha de comando" secondary={selectedProcess.command_line && selectedProcess.command_line !== '' ? selectedProcess.command_line : '-'} /></ListItem>
+                                <ListItem><ListItemText primary="PID Pai" secondary={selectedProcess.parent_pid ?? '-'} /></ListItem>
+                                <ListItem><ListItemText primary="Prioridade" secondary={selectedProcess.priority ?? '-'} /></ListItem>
+                                <ListItem><ListItemText primary="Sessão" secondary={selectedProcess.session_id ?? '-'} /></ListItem>
+                                <ListItem><ListItemText primary="Handles abertos" secondary={selectedProcess.handle_count ?? '-'} /></ListItem>
+                                <ListItem><ListItemText primary="Threads" secondary={selectedProcess.thread_count ?? selectedProcess.threads.length} /></ListItem>
+                                <ListItem><ListItemText primary="Page Faults" secondary={selectedProcess.page_faults ?? '-'} /></ListItem>
+                                <ListItem><ListItemText primary="Peak Working Set (KB)" secondary={selectedProcess.peak_working_set_kb ?? '-'} /></ListItem>
+                                <ListItem><ListItemText primary="Working Set (KB)" secondary={typeof selectedProcess.working_set_kb === 'number' && !isNaN(selectedProcess.working_set_kb) ? selectedProcess.working_set_kb : (selectedProcess.working_set_kb === 0 ? 0 : '-')} /></ListItem>
+                                <ListItem><ListItemText primary="Pagefile (KB)" secondary={selectedProcess.pagefile_kb ?? '-'} /></ListItem>
+                                <ListItem><ListItemText primary="% Memória" secondary={getMemoryPercent(selectedProcess)} /></ListItem>
+                                <ListItem><ListItemText primary="IO Read (bytes)" secondary={selectedProcess.io_read_bytes ?? '-'} /></ListItem>
+                                <ListItem><ListItemText primary="IO Write (bytes)" secondary={selectedProcess.io_write_bytes ?? '-'} /></ListItem>
+                            </List>
+                            <Typography variant="subtitle1" sx={{ mt: 2, mb: 1 }}>Recursos Abertos / Arquivos</Typography>
+                            <List dense>
+                                {Array.isArray(selectedProcess.open_resources) && selectedProcess.open_resources.length > 0 ? (
+                                    selectedProcess.open_resources.map((path, idx) => (
+                                        <ListItem key={idx}>
+                                            <ListItemText primary={path} />
+                                        </ListItem>
+                                    ))
+                                ) : (
+                                    <ListItem><ListItemText primary="Nenhum recurso aberto listado." /></ListItem>
+                                )}
+                            </List>
+                            <Typography variant="subtitle1" sx={{ mt: 2, mb: 1 }}>Threads</Typography>
+                            <List dense>
+                                {selectedProcess.threads.length > 0 ? (
+                                    selectedProcess.threads.map((t) => (
+                                        <ListItem key={t.tid}>
+                                            <ListItemText
+                                                primary={`TID: ${t.tid} | Estado: ${t.state} | Wait: ${t.wait_reason}`}
+                                                secondary={`BasePrio: ${t.base_priority} | DeltaPrio: ${t.delta_priority} | StartAddr: 0x${t.start_address.toString(16)} | User(ms): ${t.user_time_ms ?? '-'} | Kernel(ms): ${t.kernel_time_ms ?? '-'}`}
+                                            />
+                                        </ListItem>
+                                    ))
+                                ) : (
+                                    <ListItem><ListItemText primary="Nenhuma thread encontrada." /></ListItem>
+                                )}
+                            </List>
+                        </>
+                    )}
                 </DialogContent>
                 <DialogActions>
                     <Button onClick={handleCloseDialog}>Fechar</Button>

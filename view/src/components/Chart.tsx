@@ -3,7 +3,7 @@
 // Define as propriedades aceitas pelo componente Chart
 interface ChartProps {
     readonly type: 'line' | 'bar'; // Tipo do gráfico: linha ou barra
-    readonly color: string | string[];        // Cor da linha ou barra (pode ser array para múltiplas séries)
+    readonly color: string | string[]; // Cor da linha ou barra (pode ser array para múltiplas séries)
     readonly data: { name?: string; value: number;[key: string]: any }[]; // Dados do gráfico
     readonly height?: number | string; // Altura do gráfico (opcional)
     readonly width?: number | string;  // Largura do gráfico (opcional)
@@ -30,6 +30,14 @@ export default function Chart({
     // Suporte a múltiplas linhas/barras
     const multi = Array.isArray(lines) && lines.length > 0;
     const colors = Array.isArray(color) ? color : [color];
+    // Adaptador para tickFormatter: sempre retorna string e aceita (value, index)
+    const adaptTickFormatter = yTickFormatter
+        ? (value: any) => {
+            const res = yTickFormatter(value);
+            return typeof res === 'string' ? res : String(res);
+        }
+        : undefined;
+
     return (
         <ResponsiveContainer width={width} height={height}>
             {type === 'line' ? (
@@ -41,7 +49,7 @@ export default function Chart({
                         width={40}
                         tick={{ fontSize: 13 }}
                         label={yLabel ? { value: yLabel, angle: -90, position: 'insideLeft', fontSize: 13 } : undefined}
-                        tickFormatter={yTickFormatter}
+                        tickFormatter={adaptTickFormatter}
                     />
                     <Tooltip formatter={tooltipFormatter} />
                     {multi
@@ -61,7 +69,7 @@ export default function Chart({
                         width={40}
                         tick={{ fontSize: 13 }}
                         label={yLabel ? { value: yLabel, angle: -90, position: 'insideLeft', fontSize: 13 } : undefined}
-                        tickFormatter={yTickFormatter}
+                        tickFormatter={adaptTickFormatter}
                     />
                     <Tooltip formatter={tooltipFormatter} />
                     {multi

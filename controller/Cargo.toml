@@ -12,3 +12,7 @@ tokio = { version = "*", features = ["full"] }
 windows = { version = "*", features = ["Win32_System_ProcessStatus", "Win32_Foundation", "Win32_System_Threading"] }
 base64 = "*"
 num_cpus = "*"
+raw-cpuid = "*"
+once_cell = "*"
+anyhow = "*"
+chrono = "*"

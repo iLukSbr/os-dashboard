@@ -1,8 +1,6 @@
-// Importa componentes do Material UI e o Dashboard principal
 import { ThemeProvider, createTheme, CssBaseline, Container } from '@mui/material';
 import Dashboard from './components/Dashboard';
 
-// Cria um tema escuro customizado para o Material UI
 const darkTheme = createTheme({
     palette: {
         mode: 'dark', // Ativa modo escuro
