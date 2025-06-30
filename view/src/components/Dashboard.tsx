@@ -1,6 +1,7 @@
 ﻿// Importa hooks do React e componentes do Material UI
 import { useState, useEffect } from 'react';
 import { Tabs, Tab, Box } from '@mui/material';
+import DiskMonitor from './DiskMonitor';
 // Importa componentes customizados do projeto
 import MetricCard from './MetricCard';
 import Chart from './Chart';
@@ -16,6 +17,17 @@ export const TAB_FONT_SIZE = 14;        // px - Tamanho da fonte das abas
 // ======================================================
 
 // Tipagem das informações do sistema recebidas da API
+type DiskInfo = {
+    name: string;
+    total_bytes: number;
+    free_bytes: number;
+    used_bytes: number;
+    percent_used: number;
+    read_bytes: number;
+    write_bytes: number;
+    transfer_bytes: number;
+    // ... outros campos se necessário
+};
 type SystemInfo = {
     cpuTotal: string;
     cpuPerCore: number[];
@@ -27,6 +39,7 @@ type SystemInfo = {
     processCount: number;
     cpuBaseSpeedMhz?: number;
     cpuLogicalProcessors: number;
+    disks?: DiskInfo[];
 };
 
 // Tipagem das informações de cada processo
@@ -52,17 +65,17 @@ export default function Dashboard() {
     const [cpuHistory, setCpuHistory] = useState<{ name: string; value: number }[]>([]);
     // Histórico de uso de memória (para o gráfico)
     const [memHistory, setMemHistory] = useState<{ name: string; value: number }[]>([]);
+    // Histórico de discos (um array por disco)
+    const [diskHistory, setDiskHistory] = useState<Record<string, { time: string; read: number; write: number; readB: number; writeB: number }[]>>({});
 
     // Efeito para buscar dados do sistema periodicamente
     useEffect(() => {
-        // Função que busca dados da API
+        let lastDiskStats: Record<string, { read: number; write: number; readB: number; writeB: number }> = {};
         const fetchData = () => {
-            // Busca informações do sistema
             fetch('/api/system')
                 .then(res => res.json())
                 .then(data => {
                     setSystemInfo(data);
-                    // Atualiza histórico de CPU
                     setCpuHistory(prev => {
                         const next = [
                             ...prev,
@@ -70,7 +83,6 @@ export default function Dashboard() {
                         ];
                         return next.length > HISTORY_LENGTH ? next.slice(-HISTORY_LENGTH) : next;
                     });
-                    // Atualiza histórico de memória
                     setMemHistory(prev => {
                         const next = [
                             ...prev,
@@ -78,18 +90,33 @@ export default function Dashboard() {
                         ];
                         return next.length > HISTORY_LENGTH ? next.slice(-HISTORY_LENGTH) : next;
                     });
+                    // Atualiza histórico de disco
+                    if (data.disks) {
+                        setDiskHistory(prev => {
+                            const now = new Date().toLocaleTimeString();
+                            const updated: typeof prev = { ...prev };
+                            data.disks.forEach((disk: DiskInfo) => {
+                                const key = disk.name;
+                                const last = lastDiskStats[key] || { read: disk.read_bytes, write: disk.write_bytes, readB: disk.read_bytes, writeB: disk.write_bytes };
+                                const readDelta = Math.max(0, disk.read_bytes - last.read);
+                                const writeDelta = Math.max(0, disk.write_bytes - last.write);
+                                const readBDelta = Math.max(0, disk.read_bytes - last.readB);
+                                const writeBDelta = Math.max(0, disk.write_bytes - last.writeB);
+                                lastDiskStats[key] = { read: disk.read_bytes, write: disk.write_bytes, readB: disk.read_bytes, writeB: disk.write_bytes };
+                                const arr = prev[key] || [];
+                                const nextArr = [...arr, { time: now, read: readDelta, write: writeDelta, readB: readBDelta, writeB: writeBDelta }];
+                                updated[key] = nextArr.length > HISTORY_LENGTH ? nextArr.slice(-HISTORY_LENGTH) : nextArr;
+                            });
+                            return updated;
+                        });
+                    }
                 });
-            // Busca lista de processos
             fetch('/api/processes')
                 .then(res => res.json())
                 .then(setProcesses);
         };
-
-        // Executa a primeira busca imediatamente
         fetchData();
-        // Atualiza a cada 1 segundo
         const interval = setInterval(fetchData, 1000);
-        // Limpa o intervalo ao desmontar o componente
         return () => clearInterval(interval);
     }, []);
 
@@ -127,6 +154,7 @@ export default function Dashboard() {
                 >
                     <Tab label="Memória & CPU" sx={{ fontSize: TAB_FONT_SIZE, fontWeight: 600 }} />
                     <Tab label="Processos" sx={{ fontSize: TAB_FONT_SIZE, fontWeight: 600 }} />
+                    <Tab label="Disco" sx={{ fontSize: TAB_FONT_SIZE, fontWeight: 600 }} />
                 </Tabs>
                 {/* Conteúdo da aba Memória & CPU */}
                 {tab === 0 && systemInfo && (
@@ -224,6 +252,10 @@ export default function Dashboard() {
                     <Box sx={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
                         <ProcessList processes={processes} memoryTotalKb={systemInfo?.memoryTotalMb ? systemInfo.memoryTotalMb * 1024 : undefined} />
                     </Box>
+                )}
+                {/* Aba de Disco */}
+                {tab === 2 && systemInfo && (
+                    <DiskMonitor disks={systemInfo.disks || []} diskHistory={diskHistory} />
                 )}
             </Box>
         </Box>
